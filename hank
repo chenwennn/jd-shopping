@@ -1,0 +1,101 @@
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+from lxml import html
+import csv
+import re
+import time
+KEYS='處理器'
+URL='https://www.jd.com/index.html'  #目標網站
+
+def startdriver():  #啟動chrome瀏覽器
+    global driver
+    driver=webdriver.Chrome()
+    driver.implicitly_wait(10)
+
+def get_page(url):   #跳轉至京東購物網站
+    global driver
+    driver.get(url)
+    driver.implicitly_wait(5)
+
+def web_scraping_bot(a):   #搜尋關鍵字輸入,點擊銷量
+    input1=driver.find_element_by_xpath('//*[@id="key"]')
+    input1.send_keys(a)
+    input1.send_keys(Keys.ENTER)
+    time.sleep(5)
+    input2=driver.find_element_by_xpath('//*[@id="J_filter"]/div[1]/div[1]/a[2]/span')
+    actions=ActionChains(driver)
+    actions.move_to_element(input2)
+    actions.click()
+    actions.perform()
+
+
+# 主程式,商品資訊xpath爬取以及網頁自動換頁以及跳轉到目標頁後break
+def get_data():
+    global driver
+    books = [["商品名稱", "商品價錢", "評價", "出貨地"]]
+    while driver.find_element_by_xpath('//*[@id="J_bottomPage"]/span[1]/a[9]'):
+        driver.find_element_by_xpath('//*[@id="J_bottomPage"]/span[1]/a[9]').click()
+        time.sleep(10)
+        tree=html.fromstring(driver.page_source)
+        table=tree.xpath('//*[@id="J_goodsList"]/ul//li')
+        for row in table:
+            title=row.xpath('div/div[3]/a/em')
+            if title:
+                title=get_aa(str(title[0].text_content()))
+            price=row.xpath('div/div[2]/strong/i')
+            if price:
+                price=price[0].text_content()
+            shop=row.xpath('div/div[5]/span/a')
+            if shop:
+                shop=shop[0].text_content()
+            star=row.xpath('div/div[4]/strong/a')
+            if star:
+                star=star[0].text_content()
+            k=[title,price,star,shop]
+            books.append(k)
+
+        t = tree.xpath('//*[@id="J_topPage"]/span/b')
+        if int(t[0].text_content()) == 5:
+            break
+
+    return books
+
+# 多打的好像沒用到
+def next_page():
+    global driver
+    pig = driver.find_element_by_xpath('//*[@id="J_bottomPage"]/span[1]/a[9]')
+    pig.click()
+    driver.implicitly_wait(10)
+    time.sleep(10)
+
+
+
+#  此定義函數用在主程式商品資訊上,藉由re去除多餘文字
+def get_aa(data):
+    pattern='i\d'
+    match=re.search(pattern,data)
+    if match is None:
+        return []
+    else:
+        return match.group(0)
+
+#  儲存成csv檔
+def save_to_csv(items,file):
+    with open(file,"w+",newline='',encoding='utf8') as fp:
+        writer=csv.writer(fp)
+        for item in items:
+            writer.writerow(item)
+
+###   程式執行
+if __name__ == "__main__":
+    startdriver()
+    get_page(URL)
+    web_scraping_bot(KEYS)
+    time.sleep(10)
+    k=get_data()
+    driver.close()
+    print(len(k))
+    for item in k:
+        print(item)
+    save_to_csv(k,"jd intel.csv")
